@@ -1,14 +1,14 @@
-import React, {useContext, useEffect, useRef, useState} from 'react';
-import type {AnimatedTextInputRef} from '@components/RNTextInput';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import type { AnimatedTextInputRef } from '@components/RNTextInput';
 import isSearchTopmostFullScreenRoute from '@libs/Navigation/helpers/isSearchTopmostFullScreenRoute';
-import {navigationRef} from '@libs/Navigation/Navigation';
-import {startSpan} from '@libs/telemetry/activeSpans';
-import {close} from '@userActions/Modal';
+import { navigationRef } from '@libs/Navigation/Navigation';
+import { endSpan, startSpan } from '@libs/telemetry/activeSpans';
+import { close } from '@userActions/Modal';
 import CONST from '@src/CONST';
 import NAVIGATORS from '@src/NAVIGATORS';
 import SCREENS from '@src/SCREENS';
 import type ChildrenProps from '@src/types/utils/ChildrenProps';
-import {closeSearch, openSearch} from './toggleSearch';
+import { closeSearch, openSearch } from './toggleSearch';
 
 type SearchRouterStateContextType = {
     isSearchRouterDisplayed: boolean;
@@ -34,14 +34,14 @@ const defaultSearchRouterActionsContext: SearchRouterActionsContextType = {
     unregisterSearchPageInput: () => {},
 };
 
-const SearchRouterStateContext = React.createContext<SearchRouterStateContextType>({isSearchRouterDisplayed: false});
+const SearchRouterStateContext = React.createContext<SearchRouterStateContextType>({ isSearchRouterDisplayed: false });
 
 const SearchRouterActionsContext = React.createContext<SearchRouterActionsContextType>(defaultSearchRouterActionsContext);
 
 const isBrowserWithHistory = typeof window !== 'undefined' && typeof window.history !== 'undefined';
 const canListenPopState = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
 
-function SearchRouterContextProvider({children}: ChildrenProps) {
+function SearchRouterContextProvider({ children }: ChildrenProps) {
     const [isSearchRouterDisplayed, setIsSearchRouterDisplayed] = useState(false);
     const searchRouterDisplayedRef = useRef(false);
     const searchPageInputRef = useRef<AnimatedTextInputRef | undefined>(undefined);
@@ -75,10 +75,15 @@ function SearchRouterContextProvider({children}: ChildrenProps) {
 
     const openSearchRouter = () => {
         if (isBrowserWithHistory) {
-            window.history.pushState({isSearchModalOpen: true} satisfies HistoryState, '');
+            window.history.pushState({ isSearchModalOpen: true } satisfies HistoryState, '');
         }
+        startSpan(CONST.TELEMETRY.SPAN_SEARCH_ROUTER_MODAL_CLOSE_WAIT, {
+            name: CONST.TELEMETRY.SPAN_SEARCH_ROUTER_MODAL_CLOSE_WAIT,
+            op: 'ui.modal.wait',
+        });
         close(
             () => {
+                endSpan(CONST.TELEMETRY.SPAN_SEARCH_ROUTER_MODAL_CLOSE_WAIT);
                 openSearch(setIsSearchRouterDisplayed);
                 searchRouterDisplayedRef.current = true;
             },
@@ -93,7 +98,7 @@ function SearchRouterContextProvider({children}: ChildrenProps) {
         if (isBrowserWithHistory) {
             const state = window.history.state as HistoryState | null;
             if (state?.isSearchModalOpen) {
-                window.history.replaceState({isSearchModalOpen: false} satisfies HistoryState, '');
+                window.history.replaceState({ isSearchModalOpen: false } satisfies HistoryState, '');
             }
         }
     };
@@ -151,7 +156,7 @@ function SearchRouterContextProvider({children}: ChildrenProps) {
 
     // Because of the React Compiler we don't need to memoize it manually
     // eslint-disable-next-line react/jsx-no-constructed-context-values
-    const stateContextValue = {isSearchRouterDisplayed};
+    const stateContextValue = { isSearchRouterDisplayed };
 
     return (
         <SearchRouterActionsContext.Provider value={actionsContextValue}>
@@ -168,4 +173,4 @@ function useSearchRouterActions() {
     return useContext(SearchRouterActionsContext);
 }
 
-export {SearchRouterContextProvider, useSearchRouterState, useSearchRouterActions};
+export { SearchRouterContextProvider, useSearchRouterState, useSearchRouterActions };

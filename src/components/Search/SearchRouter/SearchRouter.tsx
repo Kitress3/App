@@ -1,56 +1,57 @@
-import {deepEqual} from 'fast-equals';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
-import type {TextInputProps} from 'react-native';
-import {InteractionManager, View} from 'react-native';
-import type {ValueOf} from 'type-fest';
+import { deepEqual } from 'fast-equals';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { TextInputProps } from 'react-native';
+import { InteractionManager, View } from 'react-native';
+import type { ValueOf } from 'type-fest';
 import HeaderWithBackButton from '@components/HeaderWithBackButton';
-import {usePersonalDetails} from '@components/OnyxListItemProvider';
-import {useOptionsList} from '@components/OptionListContextProvider';
+import { usePersonalDetails } from '@components/OnyxListItemProvider';
+import { useOptionsList } from '@components/OptionListContextProvider';
 import OptionsListSkeletonView from '@components/OptionsListSkeletonView';
-import type {AnimatedTextInputRef} from '@components/RNTextInput';
-import type {GetAdditionalSectionsCallback} from '@components/Search/SearchAutocompleteList';
+import type { AnimatedTextInputRef } from '@components/RNTextInput';
+import type { GetAdditionalSectionsCallback } from '@components/Search/SearchAutocompleteList';
 import SearchAutocompleteList from '@components/Search/SearchAutocompleteList';
-import {useSearchContext} from '@components/Search/SearchContext';
+import { useSearchContext } from '@components/Search/SearchContext';
 import SearchInputSelectionWrapper from '@components/Search/SearchInputSelectionWrapper';
-import type {SearchQueryString} from '@components/Search/types';
-import type {SelectionListWithSectionsHandle} from '@components/SelectionList/SelectionListWithSections/types';
-import type {SearchQueryItem} from '@components/SelectionListWithSections/Search/SearchQueryListItem';
-import {isSearchQueryItem} from '@components/SelectionListWithSections/Search/SearchQueryListItem';
+import type { SearchQueryString } from '@components/Search/types';
+import type { SelectionListWithSectionsHandle } from '@components/SelectionList/SelectionListWithSections/types';
+import type { SearchQueryItem } from '@components/SelectionListWithSections/Search/SearchQueryListItem';
+import { isSearchQueryItem } from '@components/SelectionListWithSections/Search/SearchQueryListItem';
 import useCurrentUserPersonalDetails from '@hooks/useCurrentUserPersonalDetails';
 import useDebouncedState from '@hooks/useDebouncedState';
 import useKeyboardShortcut from '@hooks/useKeyboardShortcut';
-import {useMemoizedLazyExpensifyIcons} from '@hooks/useLazyAsset';
+import { useMemoizedLazyExpensifyIcons } from '@hooks/useLazyAsset';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
 import usePrivateIsArchivedMap from '@hooks/usePrivateIsArchivedMap';
 import useResponsiveLayout from '@hooks/useResponsiveLayout';
 import useRootNavigationState from '@hooks/useRootNavigationState';
 import useThemeStyles from '@hooks/useThemeStyles';
-import {scrollToRight} from '@libs/InputUtils';
+import { scrollToRight } from '@libs/InputUtils';
 import Log from '@libs/Log';
 import backHistory from '@libs/Navigation/helpers/backHistory';
-import type {SearchOption} from '@libs/OptionsListUtils';
-import {createOptionFromReport} from '@libs/OptionsListUtils';
+import type { SearchOption } from '@libs/OptionsListUtils';
+import { createOptionFromReport } from '@libs/OptionsListUtils';
 import Parser from '@libs/Parser';
-import {getReportAction} from '@libs/ReportActionsUtils';
-import {getReportOrDraftReport} from '@libs/ReportUtils';
-import type {OptionData} from '@libs/ReportUtils';
-import {getAutocompleteQueryWithComma, getTrimmedUserSearchQueryPreservingComma} from '@libs/SearchAutocompleteUtils';
-import {getQueryWithUpdatedValues, sanitizeSearchValue} from '@libs/SearchQueryUtils';
+import { getReportAction } from '@libs/ReportActionsUtils';
+import { getReportOrDraftReport } from '@libs/ReportUtils';
+import type { OptionData } from '@libs/ReportUtils';
+import { getAutocompleteQueryWithComma, getTrimmedUserSearchQueryPreservingComma } from '@libs/SearchAutocompleteUtils';
+import { getQueryWithUpdatedValues, sanitizeSearchValue } from '@libs/SearchQueryUtils';
 import StringUtils from '@libs/StringUtils';
+import { getSpan } from '@libs/telemetry/activeSpans';
 import Navigation from '@navigation/Navigation';
 import variables from '@styles/variables';
-import {navigateToAndOpenReport, searchInServer} from '@userActions/Report';
-import {setSearchContext} from '@userActions/Search';
+import { navigateToAndOpenReport, searchInServer } from '@userActions/Report';
+import { setSearchContext } from '@userActions/Search';
 import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
 import ROUTES from '@src/ROUTES';
 import type Report from '@src/types/onyx/Report';
 import isLoadingOnyxValue from '@src/types/utils/isLoadingOnyxValue';
-import type {SubstitutionMap} from './getQueryWithSubstitutions';
-import {getQueryWithSubstitutions} from './getQueryWithSubstitutions';
-import {getUpdatedSubstitutionsMap} from './getUpdatedSubstitutionsMap';
-import {getContextualReportData, getContextualSearchAutocompleteKey, getContextualSearchQuery} from './SearchRouterUtils';
+import type { SubstitutionMap } from './getQueryWithSubstitutions';
+import { getQueryWithSubstitutions } from './getQueryWithSubstitutions';
+import { getUpdatedSubstitutionsMap } from './getUpdatedSubstitutionsMap';
+import { getContextualReportData, getContextualSearchAutocompleteKey, getContextualSearchQuery } from './SearchRouterUtils';
 
 type SearchRouterProps = {
     onRouterClose: () => void;
@@ -59,24 +60,33 @@ type SearchRouterProps = {
     ref?: React.Ref<View>;
 };
 
-function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDisplayed, ref}: SearchRouterProps) {
-    const {translate} = useLocalize();
+function SearchRouter({ onRouterClose, shouldHideInputCaret, isSearchRouterDisplayed, ref }: SearchRouterProps) {
+    const { translate } = useLocalize();
     const styles = useThemeStyles();
-    const {setShouldResetSearchQuery} = useSearchContext();
+    const { setShouldResetSearchQuery } = useSearchContext();
     const currentUserPersonalDetails = useCurrentUserPersonalDetails();
     const currentUserAccountID = currentUserPersonalDetails.accountID;
-    const [, recentSearchesMetadata] = useOnyx(ONYXKEYS.RECENT_SEARCHES, {canBeMissing: true});
-    const {areOptionsInitialized} = useOptionsList();
-    const [isSearchingForReports] = useOnyx(ONYXKEYS.IS_SEARCHING_FOR_REPORTS, {initWithStoredValues: false, canBeMissing: true});
+    const [, recentSearchesMetadata] = useOnyx(ONYXKEYS.RECENT_SEARCHES, { canBeMissing: true });
+    const { areOptionsInitialized } = useOptionsList();
+    const [isSearchingForReports] = useOnyx(ONYXKEYS.IS_SEARCHING_FOR_REPORTS, { initWithStoredValues: false, canBeMissing: true });
     const isRecentSearchesDataLoaded = !isLoadingOnyxValue(recentSearchesMetadata);
     const shouldShowList = isRecentSearchesDataLoaded && areOptionsInitialized;
+
+    const coldStartAttributeSet = useRef(false);
+    if (!coldStartAttributeSet.current) {
+        const parentSpan = getSpan(CONST.TELEMETRY.SPAN_OPEN_SEARCH_ROUTER);
+        if (parentSpan) {
+            parentSpan.setAttribute('cold_start', !areOptionsInitialized);
+            coldStartAttributeSet.current = true;
+        }
+    }
     const personalDetails = usePersonalDetails();
-    const [reports] = useOnyx(ONYXKEYS.COLLECTION.REPORT, {canBeMissing: true});
-    const [policies] = useOnyx(ONYXKEYS.COLLECTION.POLICY, {canBeMissing: true});
-    const [personalAndWorkspaceCards] = useOnyx(ONYXKEYS.DERIVED.PERSONAL_AND_WORKSPACE_CARD_LIST, {canBeMissing: true});
-    const [allFeeds] = useOnyx(ONYXKEYS.COLLECTION.SHARED_NVP_PRIVATE_DOMAIN_MEMBER, {canBeMissing: true});
+    const [reports] = useOnyx(ONYXKEYS.COLLECTION.REPORT, { canBeMissing: true });
+    const [policies] = useOnyx(ONYXKEYS.COLLECTION.POLICY, { canBeMissing: true });
+    const [personalAndWorkspaceCards] = useOnyx(ONYXKEYS.DERIVED.PERSONAL_AND_WORKSPACE_CARD_LIST, { canBeMissing: true });
+    const [allFeeds] = useOnyx(ONYXKEYS.COLLECTION.SHARED_NVP_PRIVATE_DOMAIN_MEMBER, { canBeMissing: true });
     const privateIsArchivedMap = usePrivateIsArchivedMap();
-    const {shouldUseNarrowLayout} = useResponsiveLayout();
+    const { shouldUseNarrowLayout } = useResponsiveLayout();
     const listRef = useRef<SelectionListWithSectionsHandle>(null);
     const expensifyIcons = useMemoizedLazyExpensifyIcons(['MagnifyingGlass']);
 
@@ -84,14 +94,14 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
     const [textInputValue, , setTextInputValue] = useDebouncedState('', 500);
     // The input text that was last used for autocomplete; needed for the SearchAutocompleteList when browsing list via arrow keys
     const [autocompleteQueryValue, setAutocompleteQueryValue] = useState(textInputValue);
-    const [selection, setSelection] = useState({start: textInputValue.length, end: textInputValue.length});
+    const [selection, setSelection] = useState({ start: textInputValue.length, end: textInputValue.length });
     const [autocompleteSubstitutions, setAutocompleteSubstitutions] = useState<SubstitutionMap>({});
     const textInputRef = useRef<AnimatedTextInputRef>(null);
 
-    const {contextualReportID, isSearchRouterScreen} = useRootNavigationState(getContextualReportData);
+    const { contextualReportID, isSearchRouterScreen } = useRootNavigationState(getContextualReportData);
 
     const getAdditionalSections: GetAdditionalSectionsCallback = useCallback(
-        ({recentReports}, sectionIndex) => {
+        ({ recentReports }, sectionIndex) => {
             if (!contextualReportID) {
                 return undefined;
             }
@@ -115,7 +125,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                 }
 
                 const privateIsArchived = privateIsArchivedMap[`${ONYXKEYS.COLLECTION.REPORT_NAME_VALUE_PAIRS}${contextualReportID}`];
-                const option = createOptionFromReport(report, personalDetails, currentUserAccountID, privateIsArchived, undefined, {showPersonalDetails: true});
+                const option = createOptionFromReport(report, personalDetails, currentUserAccountID, privateIsArchived, undefined, { showPersonalDetails: true });
                 reportForContextualSearch = option;
             }
 
@@ -268,7 +278,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
             backHistory(() => {
                 onRouterClose();
                 setSearchContext(true);
-                Navigation.navigate(ROUTES.SEARCH_ROOT.getRoute({query: updatedQuery}));
+                Navigation.navigate(ROUTES.SEARCH_ROOT.getRoute({ query: updatedQuery }));
             });
 
             setTextInputValue('');
@@ -330,11 +340,11 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                         const searchQuery = getContextualSearchQuery(item, policies, reports);
                         const newSearchQuery = `${searchQuery}\u00A0`;
                         onSearchQueryChange(newSearchQuery, true);
-                        setSelection({start: newSearchQuery.length, end: newSearchQuery.length});
+                        setSelection({ start: newSearchQuery.length, end: newSearchQuery.length });
 
                         const autocompleteKey = getContextualSearchAutocompleteKey(item, policies, reports);
                         if (autocompleteKey && item.autocompleteID) {
-                            const substitutions = {...autocompleteSubstitutions, [autocompleteKey]: item.autocompleteID};
+                            const substitutions = { ...autocompleteSubstitutions, [autocompleteKey]: item.autocompleteID };
                             setAutocompleteSubstitutions(substitutions);
                         }
                         setFocusAndScrollToRight();
@@ -352,10 +362,10 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                         const trimmedUserSearchQuery = getTrimmedUserSearchQueryPreservingComma(textInputValue, fieldKey);
                         const newSearchQuery = `${trimmedUserSearchQuery}${sanitizeSearchValue(item.searchQuery)}\u00A0`;
                         onSearchQueryChange(newSearchQuery, true);
-                        setSelection({start: newSearchQuery.length, end: newSearchQuery.length});
+                        setSelection({ start: newSearchQuery.length, end: newSearchQuery.length });
 
                         if (item.mapKey && item.autocompleteID) {
-                            const substitutions = {...autocompleteSubstitutions, [item.mapKey]: item.autocompleteID};
+                            const substitutions = { ...autocompleteSubstitutions, [item.mapKey]: item.autocompleteID };
                             setAutocompleteSubstitutions(substitutions);
                         }
                         setFocusAndScrollToRight();
@@ -420,21 +430,11 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
     });
     const updateAndScrollToFocusedIndex = useCallback(() => listRef.current?.updateAndScrollToFocusedIndex(1, true), []);
 
-    const modalWidth = shouldUseNarrowLayout ? styles.w100 : {width: variables.searchRouterPopoverWidth};
+    const modalWidth = shouldUseNarrowLayout ? styles.w100 : { width: variables.searchRouterPopoverWidth };
 
     return (
-        <View
-            style={[styles.flex1, modalWidth, styles.h100, !shouldUseNarrowLayout && styles.mh85vh]}
-            testID="SearchRouter"
-            ref={ref}
-        >
-            {shouldUseNarrowLayout && (
-                <HeaderWithBackButton
-                    title={translate('common.search')}
-                    onBackButtonPress={() => onRouterClose()}
-                    shouldDisplayHelpButton={false}
-                />
-            )}
+        <View style={[styles.flex1, modalWidth, styles.h100, !shouldUseNarrowLayout && styles.mh85vh]} testID="SearchRouter" ref={ref}>
+            {shouldUseNarrowLayout && <HeaderWithBackButton title={translate('common.search')} onBackButtonPress={() => onRouterClose()} shouldDisplayHelpButton={false} />}
             <View style={[shouldUseNarrowLayout ? styles.mv3 : styles.mv2, shouldUseNarrowLayout ? styles.mh5 : styles.mh2]}>
                 <SearchInputSelectionWrapper
                     value={textInputValue}
@@ -452,7 +452,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                     }}
                     caretHidden={shouldHideInputCaret}
                     shouldShowOfflineMessage
-                    wrapperStyle={{...styles.border, ...styles.alignItemsCenter}}
+                    wrapperStyle={{ ...styles.border, ...styles.alignItemsCenter }}
                     wrapperFocusedStyle={styles.borderColorFocus}
                     isSearchingForReports={!!isSearchingForReports}
                     selection={selection}
@@ -477,13 +477,7 @@ function SearchRouter({onRouterClose, shouldHideInputCaret, isSearchRouterDispla
                     textInputRef={textInputRef}
                 />
             )}
-            {!shouldShowList && (
-                <OptionsListSkeletonView
-                    fixedNumItems={4}
-                    shouldStyleAsTable
-                    speed={CONST.TIMING.SKELETON_ANIMATION_SPEED}
-                />
-            )}
+            {!shouldShowList && <OptionsListSkeletonView fixedNumItems={4} shouldStyleAsTable speed={CONST.TIMING.SKELETON_ANIMATION_SPEED} />}
         </View>
     );
 }
